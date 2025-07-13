@@ -20,7 +20,7 @@ class ModelCachingTest extends TestCase
     {
         $app['config']->set('autocache.enabled', true);
         $app['config']->set('autocache.prefix', 'autocache:');
-        $app['config']->set('autocache.use_tags', false);
+        $app['config']->set('autocache.use_tags', true);
         $app['config']->set('database.default', 'testbench');
         $app['config']->set('database.connections.testbench', [
             'driver' => 'sqlite',
@@ -45,15 +45,18 @@ class ModelCachingTest extends TestCase
         $modelClass = new class extends Model {
             use AutoCacheable;
             protected $table = 'test_models';
+            protected $fillable = ['name'];
         };
 
         $record = $modelClass::create(['name' => 'test']);
 
         $key = 'autocache:' . get_class($modelClass) . ':id:' . $record->id;
+        $tags = ['autocache:model:' . get_class($modelClass), 'autocache:table:' . $modelClass->getTable()];
+        $cache = config('autocache.use_tags') && Cache::supportsTags() ? Cache::tags($tags) : Cache::driver();
 
         $cached = $modelClass::find($record->id);
 
-        $this->assertTrue(Cache::has($key));
+        $this->assertTrue($cache->has($key));
         $this->assertEquals($record->id, $cached->id);
     }
 
@@ -62,19 +65,23 @@ class ModelCachingTest extends TestCase
         $modelClass = new class extends Model {
             use AutoCacheable;
             protected $table = 'test_models';
+            protected $fillable = ['name'];
         };
 
         $record = $modelClass::create(['name' => 'test']);
 
         $key = 'autocache:' . get_class($modelClass) . ':id:' . $record->id;
+        $tags = ['autocache:model:' . get_class($modelClass), 'autocache:table:' . $modelClass->getTable()];
+        $cache = config('autocache.use_tags') && Cache::supportsTags() ? Cache::tags($tags) : Cache::driver();
+
         $modelClass::find($record->id); // Cache it
 
-        $this->assertTrue(Cache::has($key));
+        $this->assertTrue($cache->has($key));
 
         $record->name = 'updated';
         $record->save();
 
-        $this->assertFalse(Cache::has($key));
+        $this->assertFalse($cache->has($key));
     }
 
     public function testInvalidationOnDelete()
@@ -82,17 +89,21 @@ class ModelCachingTest extends TestCase
         $modelClass = new class extends Model {
             use AutoCacheable;
             protected $table = 'test_models';
+            protected $fillable = ['name'];
         };
 
         $record = $modelClass::create(['name' => 'test']);
 
         $key = 'autocache:' . get_class($modelClass) . ':id:' . $record->id;
+        $tags = ['autocache:model:' . get_class($modelClass), 'autocache:table:' . $modelClass->getTable()];
+        $cache = config('autocache.use_tags') && Cache::supportsTags() ? Cache::tags($tags) : Cache::driver();
+
         $modelClass::find($record->id); // Cache it
 
-        $this->assertTrue(Cache::has($key));
+        $this->assertTrue($cache->has($key));
 
         $record->delete();
 
-        $this->assertFalse(Cache::has($key));
+        $this->assertFalse($cache->has($key));
     }
 }

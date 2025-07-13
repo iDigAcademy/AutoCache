@@ -2,8 +2,7 @@
 
 namespace IDigAcademy\AutoCache\Collectors;
 
-use Barryvdh\Debugbar\DataCollector\DataCollector;
-use Barryvdh\Debugbar\DataFormatter\QueryFormatter;
+use DebugBar\DataCollector\DataCollector;
 use DebugBar\DataCollector\Renderable;
 use Illuminate\Support\Facades\Event;
 use IDigAcademy\AutoCache\Events\CacheHitEvent;

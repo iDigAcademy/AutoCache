@@ -7,16 +7,23 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 use Mockery;
 use Orchestra\Testbench\TestCase;
+use ReflectionClass;
 
 class AutoCacheableTraitTest extends TestCase
 {
     public function testBootAutoCacheableRegistersEvents()
     {
-        $model = Mockery::mock(Model::class . '[bootTraits]', [])->makePartial();
-        $model->shouldAllowMockingProtectedMethods();
-        $model->shouldReceive('bootTraits')->once();
+        $modelClass = new class extends Model {
+            use AutoCacheable;
+        };
 
-        $model::bootAutoCacheable();
+        $dispatcher = Mockery::mock(\Illuminate\Events\Dispatcher::class)->makePartial();
+        $modelClass->setEventDispatcher($dispatcher);
+
+        $dispatcher->shouldReceive('listen')->with('eloquent.saved: ' . get_class($modelClass), Mockery::any())->once();
+        $dispatcher->shouldReceive('listen')->with('eloquent.deleted: ' . get_class($modelClass), Mockery::any())->once();
+
+        $modelClass::bootAutoCacheable();
     }
 
     public function testInvalidateCacheConservative()
@@ -81,7 +88,10 @@ class AutoCacheableTraitTest extends TestCase
 
         config(['autocache.prefix' => 'autocache:']);
 
-        $tags = $model->getModelTags();
+        $reflection = new ReflectionClass($model);
+        $method = $reflection->getMethod('getModelTags');
+        $method->setAccessible(true);
+        $tags = $method->invoke($model);
 
         $this->assertEquals(['autocache:model:' . get_class($model), 'autocache:table:' . $model->getTable()], $tags);
     }
@@ -105,7 +115,10 @@ class AutoCacheableTraitTest extends TestCase
             use AutoCacheable;
         };
 
-        $fields = $model->getUniqueCacheFields();
+        $reflection = new ReflectionClass($model);
+        $method = $reflection->getMethod('getUniqueCacheFields');
+        $method->setAccessible(true);
+        $fields = $method->invoke($model);
 
         $this->assertEquals(['id'], $fields);
     }

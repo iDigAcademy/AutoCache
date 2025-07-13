@@ -4,13 +4,20 @@ namespace IDigAcademy\AutoCache\Builders;
 
 use MongoDB\Laravel\Query\Builder as MongoBuilder;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Str;
 use IDigAcademy\AutoCache\Events\CacheHitEvent;
 use IDigAcademy\AutoCache\Events\CacheMissEvent;
 
 class AutoCacheMongoBuilder extends MongoBuilder
 {
     protected $skipCache = false;
+
+    protected $model;
+
+    public function setModel($model)
+    {
+        $this->model = $model;
+        return $this;
+    }
 
     public function withoutCache()
     {
@@ -24,7 +31,7 @@ class AutoCacheMongoBuilder extends MongoBuilder
             return parent::find($id, $columns);
         }
 
-        $key = $this->getUniqueCacheKey('_id', $id);
+        $key = $this->getUniqueCacheKey('id', $id);
         $tags = $this->getModelTags();
         $cache = config('autocache.use_tags') && Cache::supportsTags() ? Cache::tags($tags) : Cache::driver();
 
