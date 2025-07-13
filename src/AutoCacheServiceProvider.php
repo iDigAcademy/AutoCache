@@ -18,7 +18,7 @@ class AutoCacheServiceProvider extends ServiceProvider
             \IDigAcademy\AutoCache\Console\WarmCacheCommand::class,
         ]);
 
-        if (config('autocache.debug_mode') && class_exists('Barryvdh\Debugbar\ServiceProvider')) {
+        if (env('APP_DEBUG', false) && class_exists('Barryvdh\Debugbar\ServiceProvider')) {
             $this->app->make('debugbar')->addCollector(new AutoCacheCollector());
         }
     }
