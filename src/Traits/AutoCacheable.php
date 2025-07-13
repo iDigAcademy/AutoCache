@@ -9,8 +9,6 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 trait AutoCacheable
 {
-    protected $uniqueCacheFields = ['id'];
-
     public static function bootAutoCacheable()
     {
         static::saved(function ($model) {
@@ -58,7 +56,7 @@ trait AutoCacheable
             }
         } elseif ($config['invalidation_strategy'] === 'strategic') {
             // Granular: invalidate unique keys for this model instance
-            foreach ($this->uniqueCacheFields as $field) {
+            foreach ($this->getUniqueCacheFields() as $field) {
                 $value = $this->{$field};
                 if ($value) {
                     $key = $config['prefix'] . get_class($this) . ':' . $field . ':' . $value;
@@ -70,6 +68,11 @@ trait AutoCacheable
                 Cache::tags($config['prefix'] . 'query:' . get_class($this))->flush();
             }
         }
+    }
+
+    protected function getUniqueCacheFields()
+    {
+        return $this instanceof MongoModel ? ['_id'] : ['id'];
     }
 
     protected function getTableTag()

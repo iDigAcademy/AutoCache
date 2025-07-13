@@ -4,7 +4,9 @@ namespace IDigAcademy\AutoCache\Tests\Feature;
 
 use IDigAcademy\AutoCache\Traits\AutoCacheable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 use Orchestra\Testbench\TestCase;
 
 class ModelCachingTest extends TestCase
@@ -17,28 +19,80 @@ class ModelCachingTest extends TestCase
     protected function getEnvironmentSetUp($app)
     {
         $app['config']->set('autocache.enabled', true);
-        // Setup database migrations if needed
+        $app['config']->set('autocache.prefix', 'autocache:');
+        $app['config']->set('autocache.use_tags', false);
+        $app['config']->set('database.default', 'testbench');
+        $app['config']->set('database.connections.testbench', [
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+            'prefix' => '',
+        ]);
     }
 
-    public function testModelCaching()
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Schema::create('test_models', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->timestamps();
+        });
+    }
+
+    public function testModelCachingOnFind()
     {
         $modelClass = new class extends Model {
             use AutoCacheable;
-            protected $table = 'test_table';
+            protected $table = 'test_models';
         };
-
-        // Create a record, check cache after find, etc.
-        // This would require database setup
-        $this->artisan('migrate:fresh');
 
         $record = $modelClass::create(['name' => 'test']);
 
+        $key = 'autocache:' . get_class($modelClass) . ':id:' . $record->id;
+
         $cached = $modelClass::find($record->id);
 
-        // Assert cache has key
-        $key = config('autocache.prefix') . get_class($modelClass) . ':id:' . $record->id;
         $this->assertTrue(Cache::has($key));
+        $this->assertEquals($record->id, $cached->id);
     }
 
-    // Add more feature tests
+    public function testInvalidationOnSave()
+    {
+        $modelClass = new class extends Model {
+            use AutoCacheable;
+            protected $table = 'test_models';
+        };
+
+        $record = $modelClass::create(['name' => 'test']);
+
+        $key = 'autocache:' . get_class($modelClass) . ':id:' . $record->id;
+        $modelClass::find($record->id); // Cache it
+
+        $this->assertTrue(Cache::has($key));
+
+        $record->name = 'updated';
+        $record->save();
+
+        $this->assertFalse(Cache::has($key));
+    }
+
+    public function testInvalidationOnDelete()
+    {
+        $modelClass = new class extends Model {
+            use AutoCacheable;
+            protected $table = 'test_models';
+        };
+
+        $record = $modelClass::create(['name' => 'test']);
+
+        $key = 'autocache:' . get_class($modelClass) . ':id:' . $record->id;
+        $modelClass::find($record->id); // Cache it
+
+        $this->assertTrue(Cache::has($key));
+
+        $record->delete();
+
+        $this->assertFalse(Cache::has($key));
+    }
 }

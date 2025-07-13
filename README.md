@@ -39,5 +39,4 @@ Configuration
 * debug_mode: Enable DebugBar integration.
 * use_tags: Use cache tags.
 
-Testing
-Run tests with phpunit.
+
