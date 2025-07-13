@@ -1,0 +1,41 @@
+{
+    "name": "idigacademy/autocache",
+    "description": "Auto caching system for Laravel",
+    "type": "library",
+    "require": {
+        "php": "^8.3",
+        "illuminate/support": "^12.0",
+        "illuminate/database": "^12.0",
+        "illuminate/cache": "^12.0",
+        "illuminate/events": "^12.0",
+        "illuminate/console": "^12.0",
+        "mongodb/laravel-mongodb": "^5.2"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.0",
+        "orchestra/testbench": "^10.0"
+    },
+    "suggest": {
+        "barryvdh/laravel-debugbar": "^3.13"
+    },
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "IDigAcademy\\AutoCache\\": "src/",
+            "IDigAcademy\\AutoCache\\Tests\\": "tests/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Admin",
+            "email": "idigacademy@gmail.com"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "IDigAcademy\\AutoCache\\AutoCacheServiceProvider"
+            ]
+        }
+    }
+}
