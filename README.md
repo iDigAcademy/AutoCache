@@ -1,6 +1,6 @@
 # AutoCache
 
-A comprehensive Laravel package that implements an auto caching system for Eloquent and MongoDB models.
+A comprehensive Laravel package that implements an auto caching system for Eloquent and MongoDB models. This cache is used in several projects for iDigAcademy and will only be updated or changed according to those needs.
 
 ## Installation
 
