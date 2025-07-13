@@ -18,7 +18,7 @@
     "suggest": {
         "barryvdh/laravel-debugbar": "^3.13"
     },
-    "license": "MIT",
+    "license": "GPL-3.0-only",
     "autoload": {
         "psr-4": {
             "IDigAcademy\\AutoCache\\": "src/",
