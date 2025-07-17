@@ -15,17 +15,21 @@
         "illuminate/database": "^12.0",
         "illuminate/cache": "^12.0",
         "illuminate/events": "^12.0",
-        "illuminate/console": "^12.0",
-        "mongodb/laravel-mongodb": "^5.2"
+        "mongodb/laravel-mongodb": "^5.0"
     },
     "require-dev": {
         "barryvdh/laravel-debugbar": "^3.13",
-        "phpunit/phpunit": "^11.0",
-        "orchestra/testbench": "^10.0"
+        "laravel/pint": "^1.24.0",
+        "orchestra/testbench": "^10.0",
+        "phpunit/phpunit": "^11.0"
     },
     "autoload": {
         "psr-4": {
-            "IDigAcademy\\AutoCache\\": "src/",
+            "IDigAcademy\\AutoCache\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
             "IDigAcademy\\AutoCache\\Tests\\": "tests/"
         }
     },
@@ -35,5 +39,7 @@
                 "iDigAcademy\\AutoCache\\Providers\\AutoCacheServiceProvider"
             ]
         }
-    }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
 }

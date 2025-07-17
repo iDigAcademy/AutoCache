@@ -1,128 +1,118 @@
 <?php
 
-namespace iDigAcademy\AutoCache\Traits;
+/*
+ * Copyright (C) 2022 - 2025, iDigInfo
+ * amast@fsu.edu
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
-use Illuminate\Database\Eloquent\Builder;
+namespace IDigAcademy\AutoCache\Traits;
+
+use IDigAcademy\AutoCache\Builders\CacheableBuilder;
+use IDigAcademy\AutoCache\Builders\CacheableMongoBuilder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
-use Jenssegers\Mongodb\Connection as MongoConnection;
+use MongoDB\Laravel\Connection as MongoConnection;
 
+/**
+ * Cacheable Trait
+ *
+ * Provides automatic caching capabilities for Eloquent models.
+ * This trait enables models to automatically cache query results and
+ * provides methods for cache invalidation and management.
+ */
 trait Cacheable
 {
-    protected $cacheTtl = null;
-    protected $skipCache = false;
-    protected $cachePrefix = '';
+    /**
+     * Cache key prefix for this model
+     */
+    protected string $cachePrefix = '';
 
-    public function initializeCacheable()
+    /**
+     * Initialize the Cacheable trait
+     *
+     * Sets up the cache prefix from configuration when the trait is initialized.
+     * This method is automatically called by Laravel when the model is booted.
+     */
+    public function initializeCacheable(): void
     {
         $this->cachePrefix = config('auto-cache.prefix', 'auto-cache:');
     }
 
-    public function newEloquentBuilder($query)
+    /**
+     * Create a new Eloquent query builder for the model
+     *
+     * Returns the appropriate cacheable builder based on the database connection type.
+     * Uses CacheableMongoBuilder for MongoDB connections and CacheableBuilder for SQL.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query  The base query builder
+     */
+    public function newEloquentBuilder($query): CacheableMongoBuilder|CacheableBuilder
     {
-        $builder = parent::newEloquentBuilder($query);
-
-        $builder->macro('skipCache', function () {
-            $this->query->skipCache = true;
-            return $this;
-        });
-
-        $builder->macro('setTtl', function ($ttl) {
-            $this->query->cacheTtl = $ttl;
-            return $this;
-        });
+        if ($this->getConnection() instanceof MongoConnection) {
+            $builder = new CacheableMongoBuilder($query);
+        } else {
+            $builder = new CacheableBuilder($query);
+        }
 
         return $builder;
     }
 
-    protected function performCache($method, $key, $tags, $ttl, $callback)
+    /**
+     * Flush all cached data for this model and related models
+     *
+     * Invalidates all cached queries associated with this model's cache tags
+     * and also flushes cache for any related models defined in getCacheRelations().
+     */
+    public function flushCache(): void
     {
         $store = Cache::store(config('auto-cache.store'));
-        if (config('auto-cache.enabled') && !$this->skipCache) {
-            $result = $store->tags($tags)->remember($key, $ttl, $callback);
-            // Log for Debugbar
-            if (app()->bound('debugbar')) {
-                app('debugbar')->getCollector('auto-cache')->addHit($key);
+        $store->tags($this->getCacheTags())->flush();
+
+        // Flush related models' tags
+        foreach ($this->getCacheRelations() as $relation) {
+            if (method_exists($this, $relation)) {
+                $relatedModel = $this->$relation()->getRelated();
+                $store->tags($relatedModel->getCacheTags())->flush();
             }
-            return $result;
         }
-        if (app()->bound('debugbar')) {
-            app('debugbar')->getCollector('auto-cache')->addMiss($key);
-        }
-        return $callback();
     }
 
-    protected function getCacheKey($query)
-    {
-        $connection = $this->getConnectionName() ?? 'default';
-        if ($this->getConnection() instanceof MongoConnection) {
-            $queryStr = json_encode($query->getQuery());
-        } else {
-            $queryStr = $query->toSql();
-        }
-        return $this->cachePrefix . md5($connection . ':' . $queryStr . ':' . serialize($query->getBindings()));
-    }
-
-    protected function getCacheTags()
+    /**
+     * Get cache tags for this model
+     *
+     * Returns an array of cache tags used to group cached queries for this model.
+     * By default, uses the snake_case version of the model's class name.
+     *
+     * @return array Array of cache tag names
+     */
+    protected function getCacheTags(): array
     {
         return [Str::snake(class_basename($this))];
     }
 
-    public function flushCache()
+    /**
+     * Get related model names for cache invalidation
+     *
+     * Override this method in your model to specify which related models
+     * should have their cache invalidated when this model is modified.
+     *
+     * @return array Array of relation method names
+     */
+    protected function getCacheRelations(): array
     {
-        Cache::store(config('auto-cache.store'))->tags($this->getCacheTags())->flush();
+        return [];
     }
-
-    // Cached get
-    public function get($columns = ['*'])
-    {
-        $query = $this->getQuery();
-        $key = $this->getCacheKey($query);
-        $tags = $this->getCacheTags();
-        $ttl = $this->cacheTtl ?? config('auto-cache.ttl');
-        return $this->performCache('get', $key, $tags, $ttl, fn() => parent::get($columns));
-    }
-
-    // Cached first
-    public function first($columns = ['*'])
-    {
-        $query = $this->getQuery()->limit(1);
-        $key = $this->getCacheKey($query);
-        $tags = $this->getCacheTags();
-        $ttl = $this->cacheTtl ?? config('auto-cache.ttl');
-        return $this->performCache('first', $key, $tags, $ttl, fn() => parent::first($columns));
-    }
-
-    // Cached find
-    public function find($id, $columns = ['*'])
-    {
-        $query = $this->getQuery()->where($this->getKeyName(), $id);
-        $key = $this->getCacheKey($query);
-        $tags = $this->getCacheTags();
-        $ttl = $this->cacheTtl ?? config('auto-cache.ttl');
-        return $this->performCache('find', $key, $tags, $ttl, fn() => parent::find($id, $columns));
-    }
-
-    // For relationships (eager loading cache)
-    public function with($relations)
-    {
-        $eagerLoad = $this->parseWithRelations(is_string($relations) ? func_get_args() : $relations);
-        $this->eagerLoad = array_merge($this->eagerLoad, $eagerLoad);
-
-        // Cache each relation query
-        foreach ($eagerLoad as $name => $constraints) {
-            $relation = $this->getRelation($name);
-            $relationQuery = $relation->getQuery();
-            $relationKey = $this->getCacheKey($relationQuery) . ':relation:' . $name;
-            $relationTags = array_merge($this->getCacheTags(), [Str::snake(class_basename($relation->getRelated()))]);
-            $ttl = $this->cacheTtl ?? config('auto-cache.ttl');
-            $cached = $this->performCache('with-' . $name, $relationKey, $relationTags, $ttl, fn() => $relation->get());
-            $relation->addEagerConstraints($this->getModels());
-            $relation->match($this->getModels(), $cached, $name);
-        }
-
-        return $this;
-    }
-
-    // Add more overrides as needed (e.g., paginate, count)
 }
