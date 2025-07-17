@@ -4,13 +4,22 @@ namespace iDigAcademy\AutoCache\Tests\Feature;
 
 use iDigAcademy\AutoCache\Tests\TestCase;
 use Illuminate\Database\Eloquent\Model;
+use MongoDB\Laravel\Eloquent\Model as MongoModel;
 use iDigAcademy\AutoCache\Traits\Cacheable;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 
-class TestModel extends Model
+class SqlTestModel extends Model
 {
     use Cacheable;
     protected $table = 'tests';
+}
+
+class MongoTestModel extends MongoModel
+{
+    use Cacheable;
+    protected $connection = 'mongodb';
+    protected $collection = 'tests';
 }
 
 class CacheableTest extends TestCase
@@ -18,39 +27,60 @@ class CacheableTest extends TestCase
     public function setUp(): void
     {
         parent::setUp();
-        $this->artisan('migrate:fresh');
-        // Create schema for test table
-        \Schema::create('tests', function ($table) {
+        // Setup for SQL
+        Schema::create('tests', function ($table) {
             $table->id();
             $table->string('name');
         });
+        // No schema for MongoDB
     }
 
-    public function testCachingWorks()
+    /**
+     * @dataProvider modelProvider
+     */
+    public function testCachingWorks($modelClass)
     {
-        TestModel::create(['name' => 'test']);
-        $key = (new TestModel())->getCacheKey((new TestModel())->getQuery());
+        $model = new $modelClass();
+        $model::create(['name' => 'test']);  // Works for both (array data)
 
-        // First call misses, caches
-        $results = TestModel::get();
+        $query = $model->getQuery();
+        $key = $model->getCacheKey($query);
+
+        // First call: Misses and caches
+        $results = $modelClass::get();
         $this->assertEquals(1, $results->count());
 
-        // Second call hits
-        Cache::shouldReceive('tags->remember')->never(); // Mock if needed, but for real test
-        $results2 = TestModel::get();
-        $this->assertEquals($results, $results2);
+        // Second call: Should hit cache (verify via assertion or spy)
+        $results2 = $modelClass::get();
+        $this->assertEquals($results->toArray(), $results2->toArray());  // Compare data
     }
 
-    public function testInvalidation()
+    /**
+     * @dataProvider modelProvider
+     */
+    public function testInvalidation($modelClass)
     {
-        TestModel::create(['name' => 'test']);
-        TestModel::get(); // Cache it
+        $model = new $modelClass();
+        $modelClass::create(['name' => 'test']);
+        $modelClass::get();  // Cache it
 
-        TestModel::first()->update(['name' => 'updated']);
+        $query = $model->getQuery();
+        $key = $model->getCacheKey($query);
+
+        $instance = $modelClass::first();
+        $instance->update(['name' => 'updated']);
+
         // Cache should be flushed
-
-        $this->assertNull(Cache::get($key)); // Check flushed
+        $this->assertFalse(Cache::store(config('auto-cache.store'))->has($key));
     }
 
-    // Add Mongo test: Assume Mongo setup, create MongoModel extending Jenssegers\Model, test similarly
+    public function modelProvider()
+    {
+        return [
+            'SQL' => [SqlTestModel::class],
+            'MongoDB' => [MongoTestModel::class],
+        ];
+    }
+
+    // Add more tests (e.g., for relationships, raw queries)
 }

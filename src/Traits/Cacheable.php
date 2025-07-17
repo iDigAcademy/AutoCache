@@ -5,7 +5,7 @@ namespace iDigAcademy\AutoCache\Traits;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
-use Jenssegers\Mongodb\Connection as MongoConnection;
+use MongoDB\Laravel\Connection as MongoConnection;
 
 trait Cacheable
 {

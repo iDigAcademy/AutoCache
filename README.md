@@ -20,7 +20,7 @@ A Laravel package for automatic Eloquent model caching with support for MySQL an
 - Config: Edit `config/auto-cache.php` for TTL, store, etc.
 - Debugbar: Hits/misses shown if installed.
 
-For MongoDB models: Extend `Jenssegers\Mongodb\Eloquent\Model` and use the trait.
+For MongoDB models: Extend `MongoDB\Laravel\Eloquent\Model` and use the trait.
 
 ## Tests
 
