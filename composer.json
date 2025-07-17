@@ -1,7 +1,14 @@
 {
     "name": "idigacademy/autocache",
-    "description": "Auto caching system for Laravel",
+    "description": "Automatic model caching for Laravel with MySQL and MongoDB support",
     "type": "library",
+    "license": "GPL-3.0-only",
+    "authors": [
+        {
+            "name": "iDigAcademy",
+            "email": "idigacademy@gmail.com"
+        }
+    ],
     "require": {
         "php": "^8.3",
         "illuminate/support": "^12.0",
@@ -16,23 +23,16 @@
         "phpunit/phpunit": "^11.0",
         "orchestra/testbench": "^10.0"
     },
-    "license": "GPL-3.0-only",
     "autoload": {
         "psr-4": {
             "IDigAcademy\\AutoCache\\": "src/",
             "IDigAcademy\\AutoCache\\Tests\\": "tests/"
         }
     },
-    "authors": [
-        {
-            "name": "Admin",
-            "email": "idigacademy@gmail.com"
-        }
-    ],
     "extra": {
         "laravel": {
             "providers": [
-                "IDigAcademy\\AutoCache\\AutoCacheServiceProvider"
+                "iDigAcademy\\AutoCache\\Providers\\AutoCacheServiceProvider"
             ]
         }
     }

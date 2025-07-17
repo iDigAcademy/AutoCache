@@ -1,42 +1,27 @@
 # AutoCache
 
-A comprehensive Laravel package that implements an auto caching system for Eloquent and MongoDB models. This cache is used in several projects for iDigAcademy and will only be updated or changed according to those needs.
+A Laravel package for automatic Eloquent model caching with support for MySQL and MongoDB. Mimics laravel-model-caching but with custom extensions.
 
 ## Installation
 
-1. Install via Composer:
+1. Composer require (in your app): Add to composer.json repositories: `"repositories": [{"type": "vcs", "url": "https://github.com/iDigAcademy/AutoCache"}]`, then `composer require idigacademy/auto-cache:dev-master`.
 
-   ```bash
-   composer require idigacademy/autocache
-   ```
+2. Publish config: `php artisan vendor:publish --tag=config --provider="iDigAcademy\\AutoCache\\Providers\\AutoCacheServiceProvider"`.
 
-2. Publish the configuration file:
-   ```bash
-   php artisan vendor:publish --tag=autocache-config
-   ```
-   Usage
-   Add the AutoCacheable trait to your models:
-   ```bash
-   use IDigAcademy\AutoCache\Traits\AutoCacheable;
-   class User extends Model
-   {
-      use AutoCacheable;
-   }
-   ```
-Configure options in config/autocache.php.
+3. Use the trait in models: `use iDigAcademy\AutoCache\Traits\Cacheable;`.
 
-Commands
-* Clear cache: ```php artisan autocache:clear [--model=ModelName]```
-* Warm cache: ```php artisan autocache:warm [--model=ModelName]```
+## Usage
 
-Configuration
-* enabled: Enable/disable caching.
-* prefix: Cache key prefix.
-* ttl: Time to live in seconds.
-* invalidation_strategy: 'conservative' or 'strategic'.
-* unique_field_caching: Enable unique field caching.
-* table_query_caching: Enable table query caching.
-* debug_mode: Enable DebugBar integration.
-* use_tags: Use cache tags.
+- Cache queries: `$users = User::get();` (auto-cached).
+- Skip cache: `User::skipCache()->get();`.
+- Set TTL: `User::setTtl(300)->get();`.
+- For raw queries: `use iDigAcademy\AutoCache\Helpers\AutoCacheHelper; AutoCacheHelper::remember('custom-key', ['tag1'], 60, fn() => DB::select('raw sql'));`.
+- Clear cache: `php artisan auto-cache:clear --model=App\\Models\\User`.
+- Config: Edit `config/auto-cache.php` for TTL, store, etc.
+- Debugbar: Hits/misses shown if installed.
 
+For MongoDB models: Extend `Jenssegers\Mongodb\Eloquent\Model` and use the trait.
 
+## Tests
+
+Run `phpunit` in package root (setup test DBs).
