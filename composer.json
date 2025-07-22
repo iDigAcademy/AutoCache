@@ -36,7 +36,7 @@
     "extra": {
         "laravel": {
             "providers": [
-                "iDigAcademy\\AutoCache\\Providers\\AutoCacheServiceProvider"
+                "IDigAcademy\\AutoCache\\Providers\\AutoCacheServiceProvider"
             ]
         }
     },
