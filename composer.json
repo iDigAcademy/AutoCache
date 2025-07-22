@@ -1,5 +1,5 @@
 {
-    "name": "idigacademy/autocache",
+    "name": "idigacademy/auto-cache",
     "description": "Automatic model caching for Laravel with MySQL and MongoDB support",
     "type": "library",
     "license": "GPL-3.0-only",
