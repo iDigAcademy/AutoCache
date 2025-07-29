@@ -1,34 +1,18 @@
 <?php
 
-/*
- * Copyright (C) 2022 - 2025, iDigInfo
- * amast@fsu.edu
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
-
 namespace IDigAcademy\AutoCache\Tests\Feature;
 
+use IDigAcademy\AutoCache\Tests\Models\MongoHybridTestModel;
+use IDigAcademy\AutoCache\Tests\Models\MongoTestChild;
 use IDigAcademy\AutoCache\Tests\Models\MongoTestModel;
+use IDigAcademy\AutoCache\Tests\Models\MongoTestParent;
+use IDigAcademy\AutoCache\Tests\Models\SqlTestChild;
 use IDigAcademy\AutoCache\Tests\Models\SqlTestModel;
+use IDigAcademy\AutoCache\Tests\Models\SqlTestParent;
 use IDigAcademy\AutoCache\Tests\TestCase;
-use IDigAcademy\AutoCache\Traits\Cacheable;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use MongoDB\Laravel\Eloquent\Model as MongoModel;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 class CacheableTest extends TestCase
@@ -40,26 +24,38 @@ class CacheableTest extends TestCase
         Schema::create('tests', function ($table) {
             $table->id();
             $table->string('name');
-            $table->timestamps();  // Add timestamps to fix column error
+            $table->timestamps();
+        });
+        Schema::create('parents', function ($table) {
+            $table->id();
+            $table->string('name');
+            $table->timestamps();
+        });
+        Schema::create('children', function ($table) {
+            $table->id();
+            $table->foreignId('parent_id')->constrained('parents');
+            $table->string('name');
+            $table->timestamps();
         });
         // No schema for MongoDB
     }
 
-    protected function tearDown(): void
+    public static function modelProvider()
     {
-        // Clean up MongoDB collection after each test
-        MongoTestModel::truncate();
-        parent::tearDown();
+        return [
+            'SQL' => [SqlTestModel::class],
+            'MongoDB' => [MongoTestModel::class],
+        ];
     }
 
     #[DataProvider('modelProvider')]
     public function test_caching_works($modelClass)
     {
-        // Truncate before create to ensure clean slate (extra safety for Mongo)
+        // Truncate before create to ensure clean slate
         $modelClass::truncate();
 
         $model = new $modelClass;
-        $model::create(['name' => 'test']);  // Works for both (array data)
+        $model::create(['name' => 'test']);
 
         $builder = $model->query();
         $key = $builder->getCacheKey();
@@ -68,15 +64,15 @@ class CacheableTest extends TestCase
         $results = $modelClass::get();
         $this->assertEquals(1, $results->count());
 
-        // Second call: Should hit cache (verify via assertion or spy)
+        // Second call: Should hit cache
         $results2 = $modelClass::get();
-        $this->assertEquals($results->toArray(), $results2->toArray());  // Compare data
+        $this->assertEquals($results->toArray(), $results2->toArray());
     }
 
     #[DataProvider('modelProvider')]
     public function test_invalidation($modelClass)
     {
-        // Truncate before create to ensure clean slate (extra safety for Mongo)
+        // Truncate before create to ensure clean slate
         $modelClass::truncate();
 
         $model = new $modelClass;
@@ -91,14 +87,6 @@ class CacheableTest extends TestCase
 
         // Cache should be flushed
         $this->assertFalse(Cache::store(config('auto-cache.store'))->has($key));
-    }
-
-    public static function modelProvider(): array
-    {
-        return [
-            'SQL' => [SqlTestModel::class],
-            'MongoDB' => [MongoTestModel::class],
-        ];
     }
 
     #[DataProvider('modelProvider')]
@@ -179,24 +167,10 @@ class CacheableTest extends TestCase
     public function test_relationship_caching($modelClass)
     {
         // Define test parent and child models dynamically
-        // For SQL
         if ($modelClass === SqlTestModel::class) {
             $parentClass = SqlTestParent::class;
             $childClass = SqlTestChild::class;
-
-            // Create tables
-            Schema::create('parents', function ($table) {
-                $table->id();
-                $table->string('name');
-                $table->timestamps();
-            });
-            Schema::create('children', function ($table) {
-                $table->id();
-                $table->foreignId('parent_id')->constrained('parents');
-                $table->string('name');
-                $table->timestamps();
-            });
-            $connectionName = 'testbench'; // SQL connection
+            $connectionName = 'testbench';
         } else {
             // For MongoDB
             $parentClass = MongoTestParent::class;
@@ -204,7 +178,7 @@ class CacheableTest extends TestCase
             $connectionName = 'mongodb';
         }
 
-        // Truncate parent and child after schema creation
+        // Truncate parent and child
         $parentClass::truncate();
         $childClass::truncate();
 
@@ -228,29 +202,16 @@ class CacheableTest extends TestCase
         $queries2 = DB::connection($connectionName)->getQueryLog();
         $this->assertCount(0, $queries2, 'Second load should hit cache with no queries');
         $this->assertEquals($results->toArray(), $results2->toArray());
+        DB::connection($connectionName)->flushQueryLog();
     }
 
     #[DataProvider('modelProvider')]
     public function test_relationship_invalidation($modelClass)
     {
         // Define test parent and child models dynamically
-        // For SQL
         if ($modelClass === SqlTestModel::class) {
             $parentClass = SqlTestParent::class;
             $childClass = SqlTestChild::class;
-
-            // Create tables
-            Schema::create('parents', function ($table) {
-                $table->id();
-                $table->string('name');
-                $table->timestamps();
-            });
-            Schema::create('children', function ($table) {
-                $table->id();
-                $table->foreignId('parent_id')->constrained('parents');
-                $table->string('name');
-                $table->timestamps();
-            });
             $connectionName = 'testbench';
         } else {
             // For MongoDB
@@ -297,87 +258,24 @@ class CacheableTest extends TestCase
         DB::connection($connectionName)->flushQueryLog();
     }
 
-    // Add more tests (e.g., for relationships, raw queries)
-}
-
-// Test models in CacheableTest.php
-
-class SqlTestParent extends Model
-{
-    use Cacheable;
-
-    protected $table = 'parents';
-
-    protected $guarded = [];
-
-    public function children()
+    #[DataProvider('modelProvider')]
+    public function test_hybrid_relation_caching($modelClass)
     {
-        return $this->hasMany(SqlTestChild::class, 'parent_id');
-    }
+        if ($modelClass === SqlTestModel::class) {
+            $this->markTestSkipped('HybridRelations not applicable to SQL models');
+        }
 
-    protected function getCacheRelations()
-    {
-        return ['children'];
-    }
-}
+        MongoHybridTestModel::truncate();
+        MongoHybridTestModel::create(['name' => 'hybrid_test']);
 
-class SqlTestChild extends Model
-{
-    use Cacheable;
+        $builder = (new MongoHybridTestModel)->query();
+        $key = $builder->getCacheKey();
+        $tags = $builder->getCacheTags();
 
-    protected $table = 'children';
+        $results = MongoHybridTestModel::get();
+        $this->assertCount(1, $results);
 
-    protected $guarded = [];
-
-    public function parent()
-    {
-        return $this->belongsTo(SqlTestParent::class, 'parent_id');
-    }
-
-    protected function getCacheRelations()
-    {
-        return ['parent'];
-    }
-}
-
-class MongoTestParent extends MongoModel
-{
-    use Cacheable;
-
-    protected $connection = 'mongodb';
-
-    protected $collection = 'parents';
-
-    protected $guarded = [];
-
-    public function children()
-    {
-        return $this->hasMany(MongoTestChild::class, 'parent_id');
-    }
-
-    protected function getCacheRelations()
-    {
-        return ['children'];
-    }
-}
-
-class MongoTestChild extends MongoModel
-{
-    use Cacheable;
-
-    protected $connection = 'mongodb';
-
-    protected $collection = 'children';
-
-    protected $guarded = [];
-
-    public function parent()
-    {
-        return $this->belongsTo(MongoTestParent::class, 'parent_id');
-    }
-
-    protected function getCacheRelations()
-    {
-        return ['parent'];
+        $store = Cache::store(config('auto-cache.store'));
+        $this->assertTrue($store->tags($tags)->has($key), 'Hybrid query should be cached');
     }
 }
