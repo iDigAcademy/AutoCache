@@ -23,6 +23,8 @@ namespace IDigAcademy\AutoCache\Providers;
 use Barryvdh\Debugbar\Facades\Debugbar;
 use IDigAcademy\AutoCache\Console\Commands\Clear;
 use IDigAcademy\AutoCache\Debugbar\Collectors\AutoCacheCollector;
+use IDigAcademy\AutoCache\Services\CacheableGate;
+use Illuminate\Contracts\Auth\Access\Gate as GateContract;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
@@ -85,6 +87,14 @@ class AutoCacheServiceProvider extends ServiceProvider
             }
         });
 
+        // Gate cache invalidation event listeners
+        if (config('auto-cache.gate.enabled', true)) {
+            $gateInvalidationEvents = config('auto-cache.gate.invalidation_events', []);
+            Event::listen($gateInvalidationEvents, function () {
+                Cache::store(config('auto-cache.store'))->tags(['gate'])->flush();
+            });
+        }
+
         // Debugbar integration
         if ($this->app->bound('debugbar') && config('auto-cache.enabled')) {
             Debugbar::addCollector(new AutoCacheCollector);
@@ -138,11 +148,19 @@ class AutoCacheServiceProvider extends ServiceProvider
      *
      * Merges the package configuration with the application's configuration,
      * making the auto-cache configuration available throughout the application.
+     * Also registers the CacheableGate wrapper if Gate caching is enabled.
      *
      * @return void
      */
     public function register()
     {
         $this->mergeConfigFrom(__DIR__.'/../../config/auto-cache.php', 'auto-cache');
+
+        // Register CacheableGate wrapper if Gate caching is enabled
+        if (config('auto-cache.enabled', true) && config('auto-cache.gate.enabled', true)) {
+            $this->app->extend(GateContract::class, function ($gate, $app) {
+                return new CacheableGate($gate);
+            });
+        }
     }
 }

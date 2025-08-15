@@ -56,4 +56,41 @@ return [
      * to avoid conflicts with other cached data in the same store.
      */
     'prefix' => env('AUTO_CACHE_PREFIX', 'auto-cache:laravel:'),
+
+    /**
+     * Gate caching configuration
+     *
+     * Settings specific to caching Laravel Gate authorization checks
+     */
+    'gate' => [
+        /**
+         * Enable or disable Gate caching functionality
+         *
+         * When set to false, Gate checks will bypass caching and execute normally.
+         * This setting is independent of the main 'enabled' setting above.
+         */
+        'enabled' => env('AUTO_CACHE_GATE_ENABLED', true),
+
+        /**
+         * Cache TTL for Gate results
+         *
+         * The duration in seconds that Gate authorization results will be cached.
+         * If not set, it will use the main TTL setting above.
+         */
+        'ttl' => env('AUTO_CACHE_GATE_TTL', null),
+
+        /**
+         * Cache invalidation events
+         *
+         * List of events that should trigger Gate cache invalidation.
+         * This helps ensure cached permissions are cleared when user roles/permissions change.
+         */
+        'invalidation_events' => [
+            'eloquent.saved: *',
+            'eloquent.updated: *',
+            'eloquent.deleted: *',
+            'user.role_changed',
+            'user.permission_changed',
+        ],
+    ],
 ];
