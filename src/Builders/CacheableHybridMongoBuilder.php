@@ -1,75 +1,51 @@
 <?php
 
+/*
+ * Copyright (C) 2022 - 2025, iDigInfo
+ * amast@fsu.edu
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 namespace IDigAcademy\AutoCache\Builders;
 
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Str;
-use MongoDB\Laravel\Eloquent\Builder as MongoEloquentBuilder;
-
-class CacheableHybridMongoBuilder extends MongoEloquentBuilder
+/**
+ * Cacheable Hybrid MongoDB Eloquent Builder
+ *
+ * Extends the CacheableMongoBuilder to provide caching capabilities
+ * for MongoDB models that use HybridRelations (can relate to SQL models).
+ * Inherits all caching functionality from CacheableMongoBuilder while
+ * supporting hybrid relationships between MongoDB and SQL models.
+ */
+class CacheableHybridMongoBuilder extends CacheableMongoBuilder
 {
-    protected $cacheTtl = null;
-
-    protected $skipCache = false;
-
-    public function get($columns = ['*'])
+    /**
+     * Get cache tags for this query with hybrid relation support
+     *
+     * Returns cache tags based on the model class name for easy cache invalidation.
+     * For hybrid models, this ensures proper cache invalidation when related
+     * SQL models change as well.
+     *
+     * @return array Array of cache tag names
+     */
+    public function getCacheTags(): array
     {
-        if ($this->skipCache || ! config('auto-cache.enabled')) {
-            $result = parent::get($columns);
-            if (app()->bound('debugbar')) {
-                app('debugbar')->getCollector('auto-cache')->addMiss($this->getCacheKey());
-            }
+        $tags = parent::getCacheTags();
 
-            return $result;
-        }
+        // Add a hybrid-specific tag to allow for cross-database invalidation
+        $tags[] = 'hybrid_relations';
 
-        $key = $this->getCacheKey();
-        $tags = $this->getCacheTags();
-        $ttl = $this->cacheTtl ?? config('auto-cache.ttl');
-        $store = Cache::store(config('auto-cache.store'));
-
-        $wasMiss = false;
-        $result = $store->tags($tags)->remember($key, $ttl, function () use ($columns, &$wasMiss) {
-            $wasMiss = true;
-
-            return parent::get($columns);
-        });
-
-        if (app()->bound('debugbar')) {
-            if ($wasMiss) {
-                app('debugbar')->getCollector('auto-cache')->addMiss($key);
-            } else {
-                app('debugbar')->getCollector('auto-cache')->addHit($key);
-            }
-        }
-
-        return $result;
-    }
-
-    public function first($columns = ['*'])
-    {
-        return $this->take(1)->get($columns)->first();
-    }
-
-    public function find($id, $columns = ['*'])
-    {
-        if (is_array($id) || $id instanceof \Illuminate\Contracts\Support\Arrayable) {
-            return $this->findMany($id, $columns);
-        }
-
-        return $this->where('_id', $id)->first($columns);  // Mongo uses '_id' by default
-    }
-
-    public function getCacheKey()
-    {
-        $connection = $this->getModel()->getConnectionName() ?? 'default';
-        $queryStr = json_encode($this->toMql());
-
-        return config('auto-cache.prefix').md5($connection.':'.$queryStr.':'.serialize($this->getBindings()));
-    }
-
-    public function getCacheTags()
-    {
-        return [Str::snake(class_basename($this->getModel()))];
+        return $tags;
     }
 }

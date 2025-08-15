@@ -156,17 +156,7 @@ class CacheableGate implements GateContract
      */
     public function allows($ability, $arguments = [])
     {
-        if (! config('auto-cache.enabled') || ! config('auto-cache.gate.enabled', true)) {
-            return $this->gate->allows($ability, $arguments);
-        }
-
-        $cacheKey = $this->generateCacheKey('allows', $ability, $arguments);
-
-        return Cache::store(config('auto-cache.store'))
-            ->tags(['gate', 'gate_allows'])
-            ->remember($cacheKey, $this->cacheTtl, function () use ($ability, $arguments) {
-                return $this->gate->allows($ability, $arguments);
-            });
+        return $this->cacheGateOperation('allows', $ability, $arguments, ['gate', 'gate_allows']);
     }
 
     /**
@@ -190,17 +180,7 @@ class CacheableGate implements GateContract
      */
     public function check($abilities, $arguments = [])
     {
-        if (! config('auto-cache.enabled') || ! config('auto-cache.gate.enabled', true)) {
-            return $this->gate->check($abilities, $arguments);
-        }
-
-        $cacheKey = $this->generateCacheKey('check', $abilities, $arguments);
-
-        return Cache::store(config('auto-cache.store'))
-            ->tags(['gate', 'gate_check'])
-            ->remember($cacheKey, $this->cacheTtl, function () use ($abilities, $arguments) {
-                return $this->gate->check($abilities, $arguments);
-            });
+        return $this->cacheGateOperation('check', $abilities, $arguments, ['gate', 'gate_check']);
     }
 
     /**
@@ -212,17 +192,7 @@ class CacheableGate implements GateContract
      */
     public function any($abilities, $arguments = [])
     {
-        if (! config('auto-cache.enabled') || ! config('auto-cache.gate.enabled', true)) {
-            return $this->gate->any($abilities, $arguments);
-        }
-
-        $cacheKey = $this->generateCacheKey('any', $abilities, $arguments);
-
-        return Cache::store(config('auto-cache.store'))
-            ->tags(['gate', 'gate_any'])
-            ->remember($cacheKey, $this->cacheTtl, function () use ($abilities, $arguments) {
-                return $this->gate->any($abilities, $arguments);
-            });
+        return $this->cacheGateOperation('any', $abilities, $arguments, ['gate', 'gate_any']);
     }
 
     /**
@@ -260,17 +230,7 @@ class CacheableGate implements GateContract
      */
     public function inspect($ability, $arguments = [])
     {
-        if (! config('auto-cache.enabled') || ! config('auto-cache.gate.enabled', true)) {
-            return $this->gate->inspect($ability, $arguments);
-        }
-
-        $cacheKey = $this->generateCacheKey('inspect', $ability, $arguments);
-
-        return Cache::store(config('auto-cache.store'))
-            ->tags(['gate', 'gate_inspect'])
-            ->remember($cacheKey, $this->cacheTtl, function () use ($ability, $arguments) {
-                return $this->gate->inspect($ability, $arguments);
-            });
+        return $this->cacheGateOperation('inspect', $ability, $arguments, ['gate', 'gate_inspect']);
     }
 
     /**
@@ -324,6 +284,28 @@ class CacheableGate implements GateContract
     }
 
     /**
+     * Cache a gate operation with shared logic
+     *
+     * @param  mixed  $ability
+     * @param  mixed  $arguments
+     * @return mixed
+     */
+    private function cacheGateOperation(string $method, $ability, $arguments, array $tags)
+    {
+        if (! config('auto-cache.enabled') || ! config('auto-cache.gate.enabled', true)) {
+            return $this->gate->$method($ability, $arguments);
+        }
+
+        $cacheKey = $this->generateCacheKey($method, $ability, $arguments);
+
+        return Cache::store(config('auto-cache.store'))
+            ->tags($tags)
+            ->remember($cacheKey, $this->cacheTtl, function () use ($method, $ability, $arguments) {
+                return $this->gate->$method($ability, $arguments);
+            });
+    }
+
+    /**
      * Generate a cache key for the gate check.
      *
      * @param  mixed  $ability
@@ -341,8 +323,13 @@ class CacheableGate implements GateContract
             $abilityString = (string) $ability;
         }
 
-        // Serialize arguments for consistent cache key
-        $argumentsString = serialize($arguments);
+        // Use JSON encoding instead of serialize for better performance and reliability
+        try {
+            $argumentsString = json_encode($arguments, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            // Fallback to string representation if JSON encoding fails
+            $argumentsString = (string) $arguments;
+        }
 
         return $this->cachePrefix.md5($method.':'.$userId.':'.$abilityString.':'.$argumentsString);
     }

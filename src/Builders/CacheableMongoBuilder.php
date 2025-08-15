@@ -20,35 +20,36 @@
 
 namespace IDigAcademy\AutoCache\Builders;
 
+use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
-use MongoDB\Laravel\Eloquent\Builder as MongoEloquentBuilder;
+use MongoDB\Laravel\Eloquent\Builder as MongoBuilder;
 
 /**
- * Cacheable Eloquent Builder for MongoDB
+ * Cacheable MongoDB Eloquent Builder
  *
  * Extends the MongoDB Eloquent Builder to provide automatic caching capabilities
- * for MongoDB queries. Handles cache key generation using MQL, TTL management,
+ * for MongoDB queries. Handles cache key generation, TTL management,
  * and integrates with Debugbar for cache statistics.
  */
-class CacheableMongoBuilder extends MongoEloquentBuilder
+class CacheableMongoBuilder extends MongoBuilder
 {
     /**
      * Custom cache TTL for this query
      */
-    protected ?int $cacheTtl = null;
+    public ?int $cacheTtl = null;
 
     /**
      * Flag to skip caching for this query
      */
-    protected bool $skipCache = false;
+    public bool $skipCache = false;
 
     /**
      * Execute the query and get all results with caching
      *
-     * Retrieves query results from cache if available, otherwise executes the MongoDB query
+     * Retrieves query results from cache if available, otherwise executes the query
      * and stores the result in cache with appropriate tags and TTL.
      *
      * @param  array  $columns  The columns to select
@@ -91,7 +92,7 @@ class CacheableMongoBuilder extends MongoEloquentBuilder
     /**
      * Execute the query and get the first result with caching
      *
-     * Limits the MongoDB query to 1 result and returns the first model from the cached collection.
+     * Limits the query to 1 result and returns the first model from the cached collection.
      *
      * @param  array  $columns  The columns to select
      * @return \Illuminate\Database\Eloquent\Model|null The first model or null
@@ -104,42 +105,55 @@ class CacheableMongoBuilder extends MongoEloquentBuilder
     /**
      * Find a model by its primary key with caching
      *
-     * Handles both single ID lookups and array of IDs for MongoDB documents.
-     * Uses MongoDB's '_id' field for lookups and caching for performance.
+     * Handles both single ID lookups and array of IDs. Uses caching for performance.
      *
      * @param  mixed  $id  The primary key value(s) to find
      * @param  array  $columns  The columns to select
      */
     public function find($id, $columns = ['*']): Model|Collection|null
     {
-        if (is_array($id) || $id instanceof \Illuminate\Contracts\Support\Arrayable) {
+        if (is_array($id) || $id instanceof Arrayable) {
             return $this->findMany($id, $columns);
         }
 
-        return $this->where('_id', $id)->first($columns);  // Mongo uses '_id' by default
+        return $this->whereKey($id)->first($columns);
     }
 
     /**
-     * Generate a unique cache key for this MongoDB query
+     * Generate a unique cache key for this query
      *
-     * Creates a cache key based on the database connection, MongoDB Query Language (MQL) query,
-     * and parameter bindings to ensure uniqueness across different queries.
+     * Creates a cache key based on the MongoDB connection, query conditions,
+     * and parameters to ensure uniqueness across different queries.
+     * Uses JSON encoding instead of serialize() for better performance and reliability.
      *
      * @return string The generated cache key
      */
     public function getCacheKey(): string
     {
         $connection = $this->getModel()->getConnectionName() ?? 'default';
-        $queryStr = json_encode($this->toMql());
 
-        return config('auto-cache.prefix').md5($connection.':'.$queryStr.':'.serialize($this->getBindings()));
+        // For MongoDB, use the query builder's properties to create a unique key
+        $query = $this->getQuery();
+        $queryData = [
+            'collection' => $query->from,
+            'wheres' => $query->wheres ?? [],
+            'orders' => $query->orders ?? [],
+            'limit' => $query->limit,
+            'offset' => $query->offset,
+            'columns' => $query->columns ?? [],
+        ];
+
+        // Use JSON encoding instead of serialize for better performance and security
+        $queryString = json_encode($queryData, JSON_THROW_ON_ERROR);
+
+        return config('auto-cache.prefix').md5($connection.':'.$queryString);
     }
 
     /**
-     * Get cache tags for this MongoDB query
+     * Get cache tags for this query
      *
      * Returns cache tags based on the model class name for easy cache invalidation
-     * when the MongoDB collection data changes.
+     * when the model data changes.
      *
      * @return array Array of cache tag names
      */

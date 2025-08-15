@@ -41,16 +41,6 @@ use MongoDB\Laravel\Eloquent\Builder as MongoEloquentBuilder;
 class AutoCacheServiceProvider extends ServiceProvider
 {
     /**
-     * Flag to skip cache operations
-     */
-    protected bool $skipCache = false;
-
-    /**
-     * Custom cache TTL override
-     */
-    protected ?int $cacheTtl = null;
-
-    /**
      * Bootstrap the application services
      *
      * Publishes configuration files, registers console commands, sets up event listeners
@@ -70,22 +60,33 @@ class AutoCacheServiceProvider extends ServiceProvider
         }
 
         // Event listeners for invalidation
-        Event::listen(['eloquent.saved: *', 'eloquent.updated: *', 'eloquent.deleted: *'], function ($eventName, $data) {
-            $model = $data[0];
-            if (in_array('IDigAcademy\\AutoCache\\Traits\\Cacheable', class_uses_recursive($model))) {
-                $model->flushCache();
-                // Invalidate related tags
-                foreach ($model->getRelations() as $relation) {
-                    if ($relation instanceof \Illuminate\Database\Eloquent\Collection) {
-                        foreach ($relation as $relatedModel) {
-                            $relatedModel->flushCache();
+        // More efficient: check if caching is enabled before processing
+        if (config('auto-cache.enabled')) {
+            Event::listen(['eloquent.saved: *', 'eloquent.updated: *', 'eloquent.deleted: *'], function ($eventName, $data) {
+                $model = $data[0];
+
+                // More efficient trait checking using method_exists
+                if (method_exists($model, 'flushCache')) {
+                    $model->flushCache();
+
+                    // Only process loaded relations to avoid unnecessary queries
+                    $loadedRelations = $model->getRelations();
+                    if (! empty($loadedRelations)) {
+                        foreach ($loadedRelations as $relation) {
+                            if ($relation instanceof \Illuminate\Database\Eloquent\Collection) {
+                                foreach ($relation as $relatedModel) {
+                                    if (method_exists($relatedModel, 'flushCache')) {
+                                        $relatedModel->flushCache();
+                                    }
+                                }
+                            } elseif ($relation instanceof \Illuminate\Database\Eloquent\Model && method_exists($relation, 'flushCache')) {
+                                $relation->flushCache();
+                            }
                         }
-                    } elseif ($relation instanceof \Illuminate\Database\Eloquent\Model) {
-                        $relation->flushCache();
                     }
                 }
-            }
-        });
+            });
+        }
 
         // Gate cache invalidation event listeners
         if (config('auto-cache.gate.enabled', true)) {
@@ -101,26 +102,39 @@ class AutoCacheServiceProvider extends ServiceProvider
         }
 
         // Register macros for skipCache and setTtl
+        // These macros will work when used with CacheableBuilder instances
         EloquentBuilder::macro('skipCache', function () {
-            $this->skipCache = true;
+            // Only set if the builder supports it (i.e., CacheableBuilder)
+            if (property_exists($this, 'skipCache')) {
+                $this->skipCache = true;
+            }
 
             return $this;
         });
 
         EloquentBuilder::macro('setTtl', function ($ttl) {
-            $this->cacheTtl = $ttl;
+            // Only set if the builder supports it (i.e., CacheableBuilder)
+            if (property_exists($this, 'cacheTtl')) {
+                $this->cacheTtl = $ttl;
+            }
 
             return $this;
         });
 
         MongoEloquentBuilder::macro('skipCache', function () {
-            $this->skipCache = true;
+            // Only set if the builder supports it (i.e., CacheableMongoBuilder)
+            if (property_exists($this, 'skipCache')) {
+                $this->skipCache = true;
+            }
 
             return $this;
         });
 
         MongoEloquentBuilder::macro('setTtl', function ($ttl) {
-            $this->cacheTtl = $ttl;
+            // Only set if the builder supports it (i.e., CacheableMongoBuilder)
+            if (property_exists($this, 'cacheTtl')) {
+                $this->cacheTtl = $ttl;
+            }
 
             return $this;
         });

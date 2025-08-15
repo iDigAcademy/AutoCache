@@ -39,12 +39,12 @@ class CacheableBuilder extends Builder
     /**
      * Custom cache TTL for this query
      */
-    protected ?int $cacheTtl = null;
+    public ?int $cacheTtl = null;
 
     /**
      * Flag to skip caching for this query
      */
-    protected bool $skipCache = false;
+    public bool $skipCache = false;
 
     /**
      * Execute the query and get all results with caching
@@ -54,6 +54,8 @@ class CacheableBuilder extends Builder
      *
      * @param  array  $columns  The columns to select
      * @return \Illuminate\Database\Eloquent\Collection The query results
+     *
+     * @throws \JsonException
      */
     public function get($columns = ['*']): Collection
     {
@@ -124,15 +126,21 @@ class CacheableBuilder extends Builder
      *
      * Creates a cache key based on the database connection, SQL query string,
      * and parameter bindings to ensure uniqueness across different queries.
+     * Uses JSON encoding instead of serialize() for better performance and reliability.
      *
      * @return string The generated cache key
+     *
+     * @throws \JsonException
      */
     public function getCacheKey(): string
     {
         $connection = $this->getModel()->getConnectionName() ?? 'default';
         $queryStr = $this->toSql();
 
-        return config('auto-cache.prefix').md5($connection.':'.$queryStr.':'.serialize($this->getBindings()));
+        // Use JSON encoding instead of serialize for better performance and security
+        $bindingsString = json_encode($this->getBindings(), JSON_THROW_ON_ERROR);
+
+        return config('auto-cache.prefix').md5($connection.':'.$queryStr.':'.$bindingsString);
     }
 
     /**
