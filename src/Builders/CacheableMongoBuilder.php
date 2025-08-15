@@ -127,6 +127,8 @@ class CacheableMongoBuilder extends MongoBuilder
      * Uses JSON encoding instead of serialize() for better performance and reliability.
      *
      * @return string The generated cache key
+     *
+     * @throws \JsonException
      */
     public function getCacheKey(): string
     {

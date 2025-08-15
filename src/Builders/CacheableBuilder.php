@@ -98,6 +98,8 @@ class CacheableBuilder extends Builder
      *
      * @param  array  $columns  The columns to select
      * @return \Illuminate\Database\Eloquent\Model|null The first model or null
+     *
+     * @throws \JsonException
      */
     public function first($columns = ['*']): ?Model
     {
@@ -111,6 +113,8 @@ class CacheableBuilder extends Builder
      *
      * @param  mixed  $id  The primary key value(s) to find
      * @param  array  $columns  The columns to select
+     *
+     * @throws \JsonException
      */
     public function find($id, $columns = ['*']): Model|Collection|null
     {
