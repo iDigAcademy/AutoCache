@@ -21,23 +21,17 @@
 namespace IDigAcademy\AutoCache\Services;
 
 use Illuminate\Auth\Access\Gate;
-use Illuminate\Contracts\Auth\Access\Gate as GateContract;
 use Illuminate\Support\Facades\Cache;
 
 /**
  * Cacheable Gate Service
  *
- * Wraps Laravel's Gate implementation to provide caching capabilities
+ * Extends Laravel's Gate implementation to provide caching capabilities
  * for authorization checks, reducing database queries for repeated
  * permission checks.
  */
-class CacheableGate implements GateContract
+class CacheableGate extends Gate
 {
-    /**
-     * The original Gate instance
-     */
-    protected Gate $gate;
-
     /**
      * Cache TTL for gate results
      */
@@ -51,100 +45,54 @@ class CacheableGate implements GateContract
     /**
      * Create a new CacheableGate instance
      *
-     * @param  Gate  $gate  The original Gate instance to wrap
+     * @param  Gate  $gate  The original Gate instance to copy from
      */
     public function __construct(Gate $gate)
     {
-        $this->gate = $gate;
+        // Extract properties from the original gate using reflection
+        $reflection = new \ReflectionClass($gate);
+
+        $containerProperty = $reflection->getProperty('container');
+        $containerProperty->setAccessible(true);
+        $container = $containerProperty->getValue($gate);
+
+        $userResolverProperty = $reflection->getProperty('userResolver');
+        $userResolverProperty->setAccessible(true);
+        $userResolver = $userResolverProperty->getValue($gate);
+
+        $abilitiesProperty = $reflection->getProperty('abilities');
+        $abilitiesProperty->setAccessible(true);
+        $abilities = $abilitiesProperty->getValue($gate);
+
+        $policiesProperty = $reflection->getProperty('policies');
+        $policiesProperty->setAccessible(true);
+        $policies = $policiesProperty->getValue($gate);
+
+        $beforeCallbacksProperty = $reflection->getProperty('beforeCallbacks');
+        $beforeCallbacksProperty->setAccessible(true);
+        $beforeCallbacks = $beforeCallbacksProperty->getValue($gate);
+
+        $afterCallbacksProperty = $reflection->getProperty('afterCallbacks');
+        $afterCallbacksProperty->setAccessible(true);
+        $afterCallbacks = $afterCallbacksProperty->getValue($gate);
+
+        $guessPolicyNamesUsingCallbackProperty = $reflection->getProperty('guessPolicyNamesUsingCallback');
+        $guessPolicyNamesUsingCallbackProperty->setAccessible(true);
+        $guessPolicyNamesUsingCallback = $guessPolicyNamesUsingCallbackProperty->getValue($gate);
+
+        // Initialize the parent Gate with copied properties
+        parent::__construct(
+            $container,
+            $userResolver,
+            $abilities,
+            $policies,
+            $beforeCallbacks,
+            $afterCallbacks,
+            $guessPolicyNamesUsingCallback
+        );
+
         $this->cacheTtl = config('auto-cache.gate.ttl') ?? config('auto-cache.ttl', 3600);
         $this->cachePrefix = config('auto-cache.prefix', 'auto-cache:').'gate:';
-    }
-
-    /**
-     * Determine if a given ability has been defined.
-     *
-     * @param  \UnitEnum|string  $ability
-     * @return bool
-     */
-    public function has($ability)
-    {
-        return $this->gate->has($ability);
-    }
-
-    /**
-     * Get all of the defined abilities.
-     *
-     * @return array
-     */
-    public function abilities()
-    {
-        return $this->gate->abilities();
-    }
-
-    /**
-     * Get all of the defined policies.
-     *
-     * @return array
-     */
-    public function policies()
-    {
-        return $this->gate->policies();
-    }
-
-    /**
-     * Define a new ability.
-     *
-     * @param  string  $ability
-     * @param  callable|string  $callback
-     * @return $this
-     */
-    public function define($ability, $callback)
-    {
-        return $this->gate->define($ability, $callback);
-    }
-
-    /**
-     * Define abilities for a resource.
-     *
-     * @param  string  $name
-     * @param  string  $class
-     * @return $this
-     */
-    public function resource($name, $class, ?array $options = null)
-    {
-        return $this->gate->resource($name, $class, $options);
-    }
-
-    /**
-     * Define a policy class for a given class type.
-     *
-     * @param  string  $class
-     * @param  string  $policy
-     * @return $this
-     */
-    public function policy($class, $policy)
-    {
-        return $this->gate->policy($class, $policy);
-    }
-
-    /**
-     * Register a callback to run before all Gate checks.
-     *
-     * @return $this
-     */
-    public function before(callable $callback)
-    {
-        return $this->gate->before($callback);
-    }
-
-    /**
-     * Register a callback to run after all Gate checks.
-     *
-     * @return $this
-     */
-    public function after(callable $callback)
-    {
-        return $this->gate->after($callback);
     }
 
     /**
@@ -208,20 +156,6 @@ class CacheableGate implements GateContract
     }
 
     /**
-     * Determine if the given ability should be granted for the current user.
-     *
-     * @param  \UnitEnum|string  $ability
-     * @param  array|mixed  $arguments
-     * @return \Illuminate\Auth\Access\Response
-     *
-     * @throws \Illuminate\Auth\Access\AuthorizationException
-     */
-    public function authorize($ability, $arguments = [])
-    {
-        return $this->gate->authorize($ability, $arguments);
-    }
-
-    /**
      * Inspect the user for the given ability.
      *
      * @param  \UnitEnum|string  $ability
@@ -234,33 +168,6 @@ class CacheableGate implements GateContract
     }
 
     /**
-     * Get the raw result from the authorization callback.
-     *
-     * @param  string  $ability
-     * @param  array|mixed  $arguments
-     * @return mixed
-     *
-     * @throws \Illuminate\Auth\Access\AuthorizationException
-     */
-    public function raw($ability, $arguments = [])
-    {
-        return $this->gate->raw($ability, $arguments);
-    }
-
-    /**
-     * Get a policy instance for a given class.
-     *
-     * @param  object|string  $class
-     * @return mixed
-     *
-     * @throws \InvalidArgumentException
-     */
-    public function getPolicyFor($class)
-    {
-        return $this->gate->getPolicyFor($class);
-    }
-
-    /**
      * Get a guard instance for the given user.
      *
      * @param  \Illuminate\Contracts\Auth\Authenticatable|mixed  $user
@@ -268,7 +175,7 @@ class CacheableGate implements GateContract
      */
     public function forUser($user)
     {
-        $newGate = $this->gate->forUser($user);
+        $newGate = parent::forUser($user);
 
         return new static($newGate);
     }
@@ -293,7 +200,7 @@ class CacheableGate implements GateContract
     private function cacheGateOperation(string $method, $ability, $arguments, array $tags)
     {
         if (! config('auto-cache.enabled') || ! config('auto-cache.gate.enabled', true)) {
-            return $this->gate->$method($ability, $arguments);
+            return parent::$method($ability, $arguments);
         }
 
         $cacheKey = $this->generateCacheKey($method, $ability, $arguments);
@@ -301,7 +208,7 @@ class CacheableGate implements GateContract
         return Cache::store(config('auto-cache.store'))
             ->tags($tags)
             ->remember($cacheKey, $this->cacheTtl, function () use ($method, $ability, $arguments) {
-                return $this->gate->$method($ability, $arguments);
+                return parent::$method($ability, $arguments);
             });
     }
 
